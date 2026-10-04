@@ -3456,7 +3456,12 @@ function handleEnter(e, body, chId) {
       sel.removeAllRanges();
       sel.addRange(keep);
       syncChapter(body, chId);
-      resetNativeUndo();
+      // No resetNativeUndo here. Turning the chapter's editing off and on
+      // relays out every line of it (an editable body wraps its lines by
+      // other rules), and in Electron 43 it doesn't clear the engine's undo:
+      // ⌘Z after a break does the same with it or without it (npm run
+      // undo-check). breakRun is what sends the next ⌘Z to the structural
+      // stack.
       breakRun++;
       return true;
     }
@@ -3500,8 +3505,7 @@ function handleEnter(e, body, chId) {
     sel.removeAllRanges();
     sel.addRange(range);
     syncChapter(body, chId);
-    resetNativeUndo();
-    breakRun++;
+    breakRun++; // (no resetNativeUndo: see the break above)
     return true;
   }
   return false;
