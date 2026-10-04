@@ -763,7 +763,9 @@ body.bright .spell-menu button { color: #eee; }
   letter-spacing: 8px; color: #888;
   margin: 1.6em 0; user-select: none;
 }
-.chapter-body p.scene-break + p { text-indent: 0; }
+/* the line after a break: marked data-after-break in app.js, where a
+   p.scene-break + p rule here would restyle the whole chapter at each break */
+.chapter-body p[data-after-break] { text-indent: 0; }
 /* …except a line of dialogue, there and at a story's opening: it keeps its
    indent, in line with the speech that follows (marked in app.js). Pages
    that aren't stories (no-cap) set their lines their own way. */
