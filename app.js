@@ -3762,10 +3762,10 @@ function sceneBreakDelete(e, body, chId) {
 
 // Read a body's HTML for saving:
 function captureBody(body) {
-  // (a page marks the lines that say who said it, and a chapter the speech
-  // after a scene break, for the screen only)
+  // (a page marks the lines that say who said it, and a chapter the line
+  // and the speech after a scene break, for the screen only)
   // (and a script's page breaks, (CONT'D) and suggestions)
-  return body.innerHTML.replace(/<(b|i|em|strong|u|s|strike|sub|sup)\s+style="[^"]*"/g, '<$1').replace(/<p\b[^>]*>/g, (tag) => tag.replace(/ data-(?:attr|speech|first|walk)=""/g, '')
+  return body.innerHTML.replace(/<(b|i|em|strong|u|s|strike|sub|sup)\s+style="[^"]*"/g, '<$1').replace(/<p\b[^>]*>/g, (tag) => tag.replace(/ data-(?:attr|speech|first|walk|after-break)=""/g, '')
     .replace(/ data-(?:pg|fill|contd|ghost|ghost-empty|sp-paste)(?:="[^"]*")?/g, ''));
 }
 
@@ -3794,6 +3794,34 @@ function markDialogueOpening(body) {
     if (p.hasAttribute('data-speech') !== speech) p.toggleAttribute('data-speech', speech);
   }
 }
+
+// The line after a *** is set flush. The stylesheet can't say so with
+// p.scene-break + p: beside the ::highlight and ::selection rules, a sibling
+// rule like that makes Chromium restyle every paragraph of the chapter when
+// one turns into a break (7 ms in a 2,000-paragraph chapter). The line is
+// marked data-after-break instead, by an observer, so the mark follows every
+// change to the page however it was made, before the page is painted. For
+// the screen only: captureBody leaves it out.
+function markAfterBreaks(body) {
+  for (const p of body.querySelectorAll('p[data-after-break]')) if (!p.matches('p.scene-break + p')) p.removeAttribute('data-after-break');
+  for (const p of body.querySelectorAll('p.scene-break + p')) if (!p.hasAttribute('data-after-break')) p.setAttribute('data-after-break', '');
+}
+new MutationObserver((recs) => {
+  const bodies = new Set();
+  for (const r of recs) {
+    const t = r.target;
+    // lines added, removed or moved, or one turned into a break or back
+    if (t.classList && t.classList.contains('chapter-body')) bodies.add(t);
+    else if (r.type === 'attributes' && t.parentElement && t.parentElement.classList.contains('chapter-body')) bodies.add(t.parentElement);
+    // a whole chapter put on the page
+    for (const n of r.addedNodes) {
+      if (n.nodeType !== Node.ELEMENT_NODE) continue;
+      if (n.classList.contains('chapter-body')) bodies.add(n);
+      else if (n.firstElementChild) n.querySelectorAll('.chapter-body').forEach((b) => bodies.add(b));
+    }
+  }
+  bodies.forEach(markAfterBreaks);
+}).observe($('#chapters'), { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
 
 function syncChapter(body, chId) {
   markDialogueOpening(body);
