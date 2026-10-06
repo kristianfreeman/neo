@@ -1,5 +1,7 @@
 # bench
 
+To check the performance branches one by one, see [EVALUATING.md](EVALUATING.md).
+
 Tools for measuring how NEO feels to type in. Nothing in NEO depends on this
 folder: deleting it and the `bench` and `try` scripts in `package.json`
 removes it. Both run NEO on a throwaway library in a temp folder; your own

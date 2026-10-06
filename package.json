@@ -18,6 +18,7 @@
     "try": "electron bench/try.js",
     "undo-check": "electron bench/undo-check.js",
     "style-check": "electron bench/style-check.js",
+    "restyle-check": "electron bench/restyle-check.js",
     "release": "node scripts/release.js",
     "bundle": "node scripts/bundle.js",
     "package": "npm run package:mac",
