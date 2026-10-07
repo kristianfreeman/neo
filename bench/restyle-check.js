@@ -1,7 +1,8 @@
-// How much does NEO restyle when one paragraph is added to a long chapter?
-// NEO runs with app.js and styles.css from the base commit and from this
-// checkout, each on a throwaway library with one 2,000-paragraph chapter.
-// One paragraph goes in the middle; the style update it needs is forced and
+// How much does NEO restyle for one small change in a long chapter? NEO runs
+// with app.js and styles.css from the base commit and from this checkout,
+// each on a throwaway library with one 2,000-paragraph chapter. Two changes
+// in the middle of it, one at a time: a paragraph added (an Enter), and a
+// line turned into a *** break. The style update each needs is forced and
 // timed, and Chromium's trace says how many elements it restyled.
 //
 //   npm run restyle-check                  against main
@@ -39,9 +40,11 @@ if (!ROLE) {
     const before = await run('before');
     const after = await run('after');
     if (!before || !after) { console.log('a run failed'); app.exit(1); return; }
-    console.log('\none paragraph added to a 2,000-paragraph chapter');
-    for (const r of [before, after]) {
-      console.log(`  ${r.label.padEnd(24)} style update ${r.ms.toFixed(1).padStart(5)} ms   ${String(r.restyled).padStart(6)} elements restyled`);
+    for (const [key, what] of [['add', 'a paragraph added'], ['brk', 'a line turned into a *** break']]) {
+      console.log(`\n${what}, in a 2,000-paragraph chapter`);
+      for (const r of [before, after]) {
+        console.log(`  ${r.label.padEnd(24)} style update ${r[key].ms.toFixed(1).padStart(5)} ms   ${String(r[key].restyled).padStart(6)} elements restyled`);
+      }
     }
     app.exit(0);
   })();
@@ -93,28 +96,38 @@ app.whenReady().then(async () => {
     await openBook(library.shelves[0].bookIds[0]);
   })()`);
   await wait(1000);
-  const addOne = `(() => {
+  // each change made, its style update forced and timed, then undone
+  const change = (doIt, undo) => `(() => {
     const body = document.querySelector('.chapter-body');
-    const p = document.createElement('p');
-    p.textContent = 'x';
+    const at = body.children[1000];
     document.body.offsetTop;
     const t = performance.now();
-    body.children[1000].after(p);
+    ${doIt}
     document.body.offsetTop;
     const ms = performance.now() - t;
-    p.remove();
+    ${undo}
     document.body.offsetTop;
     return ms;
   })()`;
-  const times = [];
-  for (let i = 0; i < 9; i++) times.push(await js(addOne));
-  await contentTracing.startRecording({ included_categories: ['devtools.timeline'] });
-  await js(addOne);
-  const file = await contentTracing.stopRecording(path.join(tmp, 'trace.json'));
-  const restyled = JSON.parse(fs.readFileSync(file, 'utf8')).traceEvents
-    .filter((e) => e.name === 'UpdateLayoutTree' && e.args && e.args.elementCount)
-    .map((e) => e.args.elementCount);
-  times.sort((a, b) => a - b);
-  process.stdout.write('RESTYLE ' + JSON.stringify({ label, ms: times[4], restyled: Math.max(0, ...restyled) }) + '\n');
+  const changes = {
+    add: change(`const p = document.createElement('p'); p.textContent = 'x'; at.after(p);`, `p.remove();`),
+    // as handleEnter makes a break: the line becomes ***, an empty line after it
+    brk: change(`const was = at.innerHTML; at.className = 'scene-break'; at.textContent = '***'; const np = document.createElement('p'); np.innerHTML = '<br>'; at.after(np);`,
+      `np.remove(); at.className = ''; at.innerHTML = was;`),
+  };
+  const result = { label };
+  for (const [key, code] of Object.entries(changes)) {
+    const times = [];
+    for (let i = 0; i < 9; i++) times.push(await js(code));
+    await contentTracing.startRecording({ included_categories: ['devtools.timeline'] });
+    await js(code);
+    const file = await contentTracing.stopRecording(path.join(tmp, key + '-trace.json'));
+    const restyled = JSON.parse(fs.readFileSync(file, 'utf8')).traceEvents
+      .filter((e) => e.name === 'UpdateLayoutTree' && e.args && e.args.elementCount)
+      .map((e) => e.args.elementCount);
+    times.sort((a, b) => a - b);
+    result[key] = { ms: times[4], restyled: Math.max(0, ...restyled) };
+  }
+  process.stdout.write('RESTYLE ' + JSON.stringify(result) + '\n');
   app.exit(0);
 });
